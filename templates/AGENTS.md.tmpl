@@ -38,6 +38,8 @@ Run build and tests before every commit.
   starting. Update `docs/STATE.md` when you finish a session.
 - Work one roadmap phase at a time: spec → plan → build → separate review.
   Reviews are done in a separate pass and the reviewer never edits code.
+  The reviewer has no shell: write `.review/diff.patch` and
+  `.review/test-output.txt` first (see the workflow).
 - Scope is defined by `docs/PRD.md`, including its out-of-scope list.
   Don't build out-of-scope work; propose a roadmap change instead.
 - Architecture decisions go in `docs/adr/` using the template there.

@@ -11,6 +11,9 @@ id_rsa*
 secrets/
 *.local
 
+# Review packet written for the reviewer agent (local evidence, not source)
+.review/
+
 # project-bootstrap backups (written before a --force overwrite)
 *.pre-bootstrap.bak
 *.pre-bootstrap.bak.*

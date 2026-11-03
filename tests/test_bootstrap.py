@@ -9,6 +9,7 @@ Run from the repo root:
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
@@ -19,11 +20,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "bootstrap.py"
 
-# Same narrowed pattern the script's scanner uses: only bootstrap-style
-# tokens (inner content starts with an uppercase letter) are genuine
-# fill-in tokens. Prose like {{...}} and other engines' examples
-# ({{ user.name }}) must survive a fill untouched.
-TOKEN_RE = re.compile(r"\{\{\s*[A-Z][^{}]*\}\}")
+_spec = importlib.util.spec_from_file_location("bootstrap_under_test", SCRIPT)
+bootstrap = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(bootstrap)  # type: ignore[union-attr]
+# Fills use the script's own notion of a token (known template names), so
+# prose like {{...}} and other engines' examples survive a fill untouched.
+FILL_TEXT = "Not in v1: a concrete example non-goal."
 
 NO_SKILLS_SENTENCE = "No stack skills installed for this project."
 
@@ -75,8 +77,11 @@ def fill_all_tokens(root: Path) -> None:
     for rel in EXPECTED_FILES:
         path = root / rel
         if path.suffix == ".md" and path.is_file():
-            path.write_text(TOKEN_RE.sub("FILLED", path.read_text(encoding="utf-8")),
-                            encoding="utf-8")
+            text = path.read_text(encoding="utf-8")
+            text = bootstrap.BRACE_RE.sub(
+                lambda m: FILL_TEXT if bootstrap._is_token(m.group(0)) else m.group(0),
+                text)
+            path.write_text(text, encoding="utf-8")
     setup = root / "docs" / "SETUP.md"
     if setup.is_file():
         text = setup.read_text(encoding="utf-8")
@@ -85,7 +90,18 @@ def fill_all_tokens(root: Path) -> None:
         # count — the script's check requires it on a line of its own.
         if not any(line.strip() == NO_SKILLS_SENTENCE
                    for line in text.splitlines()):
-            setup.write_text(text + "\n" + NO_SKILLS_SENTENCE + "\n",
+            # Do what the template tells an agent to do: delete the table
+            # rows, then state the sentence on its own line.
+            kept = []
+            in_table = False
+            for line in text.splitlines():
+                if line.lstrip().startswith("|") and "pinned sha" in line.lower():
+                    in_table = True
+                if in_table and line.lstrip().startswith("|"):
+                    continue
+                in_table = False
+                kept.append(line)
+            setup.write_text("\n".join(kept) + "\n\n" + NO_SKILLS_SENTENCE + "\n",
                              encoding="utf-8")
 
 
@@ -324,7 +340,77 @@ class BootstrapTests(unittest.TestCase):
                          encoding="utf-8")
         result = run_script("--verify", "--target", str(self.target))
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("no pinned skill SHA", result.stdout)
+        self.assertIn("no skills table", result.stdout)
+        # sentence AND leftover rows contradict each other
+        setup.write_text(text + "\n" + self._skills_md(
+            "| A | https://example.com | main | d | s |\n"), encoding="utf-8")
+        result = run_script("--verify", "--target", str(self.target))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("delete the rows", result.stdout)
+
+    # (q) hand-lowercased leftover token is still caught; foreign engines' braces are not
+    def test_q_lowercase_leftover_flagged_foreign_braces_not(self):
+        run_script(*setup_args(self.target, "--create-target", "--allow-placeholders"))
+        fill_all_tokens(self.target)
+        ctx = self.target / "docs" / "CONTEXT.md"
+        ctx.write_text(ctx.read_text(encoding="utf-8") +
+                       "\nJinja: {{ user.name }} {{ count }} {{ User }} {{...}}\n",
+                       encoding="utf-8")
+        result = run_script("--verify", "--target", str(self.target))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        ctx.write_text(ctx.read_text(encoding="utf-8") + "\nleft {{stack}} over\n",
+                       encoding="utf-8")
+        result = run_script("--verify", "--target", str(self.target))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("{{stack}}", result.stdout)
+
+    # (r) trivial out-of-scope items do not satisfy the check
+    def test_r_trivial_out_of_scope_items_rejected(self):
+        for trivial in ("n/a", "none", "TBD", "x"):
+            md = "## Out of scope — explicitly\n\n- %s\n" % trivial
+            self.assertFalse(bootstrap.prd_out_of_scope_ok(md), trivial)
+        self.assertTrue(bootstrap.prd_out_of_scope_ok(
+            "## Out of scope\n- No user accounts in v1\n"))
+
+    def _skills_md(self, rows: str) -> str:
+        return ("| Skill | Source URL | Pinned SHA | Date installed | Read-summary |\n"
+                "|---|---|---|---|---|\n" + rows)
+
+    # (s) SETUP: EVERY row needs a full SHA matching the reference pin + a summary
+    def test_s_setup_every_row_checked(self):
+        url = "https://github.com/twostraws/SwiftUI-Agent-Skill"
+        pin = bootstrap.known_pins()[url]
+        summary = "Loads SwiftUI coding rules; no network or credentials."
+        good = f"| A | {url} | {pin} | 2026-11-03 | {summary} |\n"
+        self.assertEqual(bootstrap.setup_record_problems(self._skills_md(good)), [])
+        # second row with no SHA: the old 'any SHA anywhere' check passed this
+        bad = good + f"| B | https://example.com/b | main | 2026-11-03 | {summary} |\n"
+        self.assertTrue(bootstrap.setup_record_problems(self._skills_md(bad)))
+        # wrong SHA for a known pinned skill
+        wrong = f"| A | {url} | {'a' * 40} | 2026-11-03 | {summary} |\n"
+        self.assertTrue(any("differs" in p for p in
+                            bootstrap.setup_record_problems(self._skills_md(wrong))))
+        # missing read-summary
+        nosum = f"| A | {url} | {pin} | 2026-11-03 | ok |\n"
+        self.assertTrue(any("read-summary" in p for p in
+                            bootstrap.setup_record_problems(self._skills_md(nosum))))
+
+    # (t) the pins in references/ are well-formed and cover all four skills
+    def test_t_reference_pins_wellformed(self):
+        self.assertEqual(len(bootstrap.known_pins()), 4)
+
+    # (u) reviewer template: no shell, packet required, ignored by git
+    def test_u_reviewer_template_contract(self):
+        text = (REPO_ROOT / "templates" / "agents" / "reviewer.md.tmpl").read_text(
+            encoding="utf-8")
+        tools = re.search(r"^tools:\s*(.+)$", text, re.M).group(1)
+        self.assertNotIn("Bash", tools)
+        for needle in (".review/diff.patch", ".review/test-output.txt",
+                       "self-reported"):
+            self.assertIn(needle, text)
+        gi = (REPO_ROOT / "templates" / "gitignore" / "generic.txt").read_text(
+            encoding="utf-8")
+        self.assertIn(".review/", gi)
 
 
 if __name__ == "__main__":

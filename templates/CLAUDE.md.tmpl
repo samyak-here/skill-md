@@ -49,6 +49,8 @@ CLAUDE.md tradition — see docs/SETUP.md for the source.)
 - Before starting work, read `docs/STATE.md` and the current phase in
   `docs/ROADMAP.md`. When you finish a session, update `docs/STATE.md`.
 - The reviewer agent (`.claude/agents/reviewer.md`) reviews; it never edits.
+  It has no shell: write `.review/diff.patch` and `.review/test-output.txt`
+  first (see the workflow).
 - Scope is `docs/PRD.md`. If it's not in v1 scope, don't build it — propose
   a roadmap change instead.
 

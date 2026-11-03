@@ -22,8 +22,10 @@ and summarised in the Read-summary column (SKILL.md Step 4,
 read-before-install). If no stack skills were installed (python/generic
 default), delete the table rows below and write this sentence on its own
 line instead: No stack skills installed for this project. (The
-`--verify` content check looks for either a 40-character pinned SHA in
-this file or that exact sentence on its own line.)
+`--verify` content check requires either that exact sentence on its own
+line, or EVERY row of the table below to carry a full 40-character SHA
+(matching the reference's pin) and a real read-summary. Delete unused
+rows.)
 
 | Skill | Source URL | Pinned SHA | Date installed | Read-summary |
 |---|---|---|---|---|

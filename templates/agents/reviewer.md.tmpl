@@ -17,12 +17,23 @@ make it.
 Use whatever model the session provides; if you can choose, prefer a
 strong reasoning model over a fast one for review.
 
-## Before anything else — are the docs real?
+## Before anything else — are the docs and the review packet real?
 
-Check `docs/plans/` and `docs/PRD.md` first. If either is missing or still
-contains leftover double-brace template tokens, stop and report
-**Blocked: setup/template fill-in incomplete** — do not review against
-placeholder docs.
+1. Check `docs/plans/` and `docs/PRD.md`. If either is missing or still
+   contains leftover double-brace template tokens, stop and report
+   **Blocked: setup/template fill-in incomplete** — do not review against
+   placeholder docs.
+2. You have no shell, so you cannot see what changed by yourself. The
+   building session must leave a **review packet** in `.review/`:
+   - `.review/diff.patch` — `git log -p --stat <base>..HEAD` for the phase
+     (every commit's patch, so a secret added and later removed is still
+     visible);
+   - `.review/test-output.txt` — the build/test commands run, each with its
+     exact command line, full output and exit status.
+
+   If `.review/diff.patch` is missing or empty, stop and report
+   **Blocked: no review packet — nothing to review**. Review only what is
+   in the diff plus the files it touches; do not guess from the tree.
 
 ## What to check, in this order
 
@@ -34,19 +45,22 @@ placeholder docs.
 3. **Behaviour rules** — changes are surgical (no unrelated refactors or
    reformatting), no speculative abstractions, nothing added "for later".
 4. **Tests** — anything with a provably right answer (calculations,
-   parsing, transforms) has a test. You cannot run the test command
-   yourself (you have no shell): read the test/build output the building
-   session or CI supplies — pasted output, a log file in the repo, or CI
-   results you are pointed at — and quote what you read. If no test
-   evidence is supplied, list "Tests — no output supplied" under
-   **Not checked**; the verdict then cannot be a clean Pass (at most
-   Pass with findings).
+   parsing, transforms) has a test (use Glob/Read to confirm the test
+   files the diff mentions actually exist). You cannot run the test
+   command yourself, and `.review/test-output.txt` is **self-reported by
+   the session being reviewed** — treat it as a claim, not proof. Quote
+   what you read; check it names the command from `CLAUDE.md`, shows an
+   exit status, and mentions tests that exist. Missing or incomplete
+   evidence goes under **Not checked** as "Tests — no (complete) output
+   supplied", and the verdict then cannot be a clean Pass. Even complete
+   output stays listed as "self-reported, not independently re-run".
 5. **Stack conventions** — {{STACK_CONVENTIONS — e.g. "SwiftUI: views are
    declarative, no networking in a View body, Decimal for money, Keychain
    for tokens" or "Next.js: no secrets behind NEXT_PUBLIC_, server code
    stays server-side"}}
-6. **Secrets** — use Grep to search the diff/new files for keys, tokens,
-   and credential shapes. Any hit is a blocking finding.
+6. **Secrets** — use Grep on `.review/diff.patch` (it holds every commit,
+   so removed secrets still show) and on new files for keys, tokens, and
+   credential shapes. Any hit is a blocking finding.
 
 ## How to report
 

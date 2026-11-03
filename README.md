@@ -165,6 +165,31 @@ preserved, not replaced.
 `rm -rf ~/.claude/skills/project-bootstrap`. Nothing else on your system
 was touched by installing it.
 
+## Changelog — v4 (2026-11-03)
+
+Fixes from a third critical review:
+
+- **Tokens are recognised by name, not shape.** A `{{NAME}}` is a leftover
+  fill-in token if NAME (case-insensitive) is one the bundled templates
+  use. A hand-lowercased `{{stack}}` is now caught; `{{ user.name }}`,
+  `{{ User }}` and `{{...}}` in a project's own docs are still ignored.
+- **The reviewer can now see what changed.** It still has no shell, so the
+  building session leaves a review packet: `.review/diff.patch`
+  (`git log -p --stat <base>..HEAD`, so removed secrets stay visible) and
+  `.review/test-output.txt`. No diff means **Blocked**; the reviewer treats
+  the test output as self-reported and says so. `.review/` is gitignored.
+- **`--verify` content checks are per-skill.** Every row of the SETUP.md
+  skills table needs a full 40-hex SHA (equal to the pin in `references/`
+  for known skills) and a real read-summary; the none-sentence cannot
+  coexist with leftover rows. Out-of-scope items must be non-trivial
+  (not `n/a`, `none`, `TBD`, or under 8 characters).
+- Tests now import the script's own token logic, so fixtures cannot drift
+  from it; new tests cover each item above.
+
+Not fixed on purpose: the reviewer's tests remain unverifiable by the
+reviewer itself (no shell), and `AGENTS.md` still mirrors `CLAUDE.md` by
+convention only.
+
 ## Changelog — v3 (2026-11-03)
 
 Fixes from a second critical review, which caught v2's verify gate

@@ -32,22 +32,22 @@ Behaviour:
     so re-running never corrupts or duplicates it. A mangled block (end
     marker before start marker) is a clean error, file left untouched.
   * Verification checks that required dirs/files exist AND scans every
-    generated file for leftover fill-in tokens. Leftover tokens fail
+    generated file for leftover fill-in tokens (a token is a {{NAME}} whose
+    NAME — case-insensitively — is used by the bundled templates). Leftover tokens fail
     verification unless --allow-placeholders is passed (the Step 2 setup
     run), in which case they are reported as a per-file warning.
     --allow-placeholders is rejected together with --verify: Step 6
     verification must run against filled files.
-  * The token pattern only matches bootstrap-style tokens — double braces
-    whose inner content starts with an uppercase letter ({{STACK}},
-    {{BUILD_COMMAND}}, and the long fill-in prompts, which all start with
-    an uppercase word). Prose like {{...}} and template examples from
-    other engines (Jinja/Handlebars/Vue: {{ user.name }}, {{ count }})
-    are NOT flagged.
+  * A fill-in token is a {{NAME}} whose NAME (case-insensitive) is one the
+    bundled templates use ({{STACK}}, {{BUILD_COMMAND}}, ...). Prose like
+    {{...}} and other engines' examples ({{ user.name }}) are NOT flagged,
+    while a hand-lowercased leftover such as {{stack}} IS.
   * Verification also checks content, not just existence: the PRD's
-    out-of-scope list must be non-empty (the interview rule), and
-    docs/SETUP.md must record a pinned skill SHA or state that no stack
-    skills were installed. In a setup run with --allow-placeholders these
-    two checks are warnings only (Step 3 has not filled the docs yet).
+    out-of-scope list must have a real (non-trivial) item, and
+    docs/SETUP.md must either state that no stack skills were installed or
+    list EVERY installed skill with a full 40-hex SHA (equal to the pin in
+    references/ for known skills) and a real read-summary. In a setup run
+    with --allow-placeholders these checks are warnings only.
 """
 
 from __future__ import annotations
@@ -90,17 +90,63 @@ GITIGNORE_END = "# <<< project-bootstrap <<<"
 
 CLAUDE_LINE_WARN = 80
 
-# Bootstrap fill-in tokens are SHOUTY: the inner content starts with an
-# uppercase letter ({{STACK}}, {{TERM_1}}, {{BUILD_COMMAND}}, and the long
-# fill-in prompts such as {{OUT_OF_SCOPE_1 — ...}}, which start with an
-# uppercase word). Matching only that shape keeps verification from
-# flagging prose like {{...}} or other template engines' examples
-# (Jinja/Handlebars/Vue: {{ user.name }}, {{ count }}).
-TOKEN_RE = re.compile(r"\{\{\s*[A-Z][^{}]*\}\}")
+# Any {{...}} span; whether it is a *bootstrap* token is decided by name
+# (see known_token_names), not by its shape. Prose like {{...}} and other
+# engines' examples ({{ user.name }}, {{ count }}) have no known name and
+# are never flagged; a hand-edited {{stack}} IS flagged because STACK is a
+# name the templates use.
+BRACE_RE = re.compile(r"\{\{[^{}]*\}\}")
+TOKEN_NAME_RE = re.compile(r"^\{\{\s*([A-Za-z][A-Za-z0-9_]*)(?![A-Za-z0-9_])")
+UPPER_NAME_RE = re.compile(r"[A-Z][A-Z0-9_]*")
 
-HEX40_RE = re.compile(r"\b[0-9a-f]{40}\b")
+FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+PIN_ROW_RE = re.compile(r"(https://github\.com/[^\s|)]+)\s*\|\s*`([0-9a-f]{40})`")
 NO_SKILLS_SENTENCE = "No stack skills installed for this project."
 OUT_OF_SCOPE_HEADING_RE = re.compile(r"out.of.scope", re.IGNORECASE)
+TRIVIAL_ITEMS = {"todo", "tbd", "n/a", "na", "none", "nothing", "-", "?", "..."}
+MIN_ITEM_CHARS = 8
+MIN_SUMMARY_CHARS = 20
+
+_KNOWN_NAMES: set[str] | None = None
+_KNOWN_PINS: dict[str, str] | None = None
+
+
+def known_token_names() -> set[str]:
+    """Upper-case token names used anywhere in the bundled templates and
+    references — the only names verification treats as fill-in tokens."""
+    global _KNOWN_NAMES
+    if _KNOWN_NAMES is None:
+        names: set[str] = set()
+        for root in (TEMPLATES, SKILL_ROOT / "references"):
+            for path in root.rglob("*"):
+                if path.is_file() and path.suffix in (".tmpl", ".md"):
+                    for m in BRACE_RE.finditer(path.read_text(encoding="utf-8")):
+                        n = TOKEN_NAME_RE.match(m.group(0))
+                        if n and UPPER_NAME_RE.fullmatch(n.group(1)):
+                            names.add(n.group(1))
+        _KNOWN_NAMES = names
+    return _KNOWN_NAMES
+
+
+def known_pins() -> dict[str, str]:
+    """{repo URL: pinned SHA} parsed from the references' pinned-skills tables."""
+    global _KNOWN_PINS
+    if _KNOWN_PINS is None:
+        pins: dict[str, str] = {}
+        for path in (SKILL_ROOT / "references").glob("*.md"):
+            for m in PIN_ROW_RE.finditer(path.read_text(encoding="utf-8")):
+                pins[m.group(1).rstrip("/")] = m.group(2)
+        _KNOWN_PINS = pins
+    return _KNOWN_PINS
+
+
+def _is_token(span: str) -> bool:
+    n = TOKEN_NAME_RE.match(span)
+    return bool(n) and n.group(1).upper() in known_token_names()
+
+
+def strip_tokens(text: str) -> str:
+    return BRACE_RE.sub(lambda m: "" if _is_token(m.group(0)) else m.group(0), text)
 
 
 class BootstrapError(Exception):
@@ -123,9 +169,9 @@ def render(text: str, values: dict[str, str]) -> str:
 def find_tokens(text: str) -> list[str]:
     """Distinct leftover {{...}} tokens, in order of first appearance."""
     seen: list[str] = []
-    for match in TOKEN_RE.finditer(text):
+    for match in BRACE_RE.finditer(text):
         token = match.group(0)
-        if token not in seen:
+        if _is_token(token) and token not in seen:
             seen.append(token)
     return seen
 
@@ -219,7 +265,7 @@ def prd_out_of_scope_ok(text: str) -> bool:
     template even when the list itself was never filled in, so counting
     prose would make this check useless. An item counts if, after removing
     any leftover template tokens from it, something real remains (not
-    blank, not a lone TODO/TBD).
+    trivial: at least MIN_ITEM_CHARS characters, and not TODO/TBD/n/a/none).
     """
     lines = text.splitlines()
     in_section = False
@@ -235,20 +281,71 @@ def prd_out_of_scope_ok(text: str) -> bool:
         item = re.match(r"\s*[-*]\s+(.*)$", line)
         if not item:
             continue
-        content = TOKEN_RE.sub("", item.group(1)).strip()
+        content = strip_tokens(item.group(1)).strip()
         content = content.strip("`*_ ").strip()
-        if content and content.upper() not in ("TODO", "TBD"):
+        if len(content) >= MIN_ITEM_CHARS and content.lower() not in TRIVIAL_ITEMS:
             return True
     return False
 
 
-def setup_record_ok(text: str) -> bool:
-    """True if SETUP.md records a pinned skill SHA (40 hex chars) or states,
-    on a line of its own, that no stack skills were installed."""
-    if HEX40_RE.search(text):
-        return True
-    return any(line.strip() == NO_SKILLS_SENTENCE
-               for line in text.splitlines())
+def setup_record_problems(text: str) -> list[str]:
+    """Problems with docs/SETUP.md's installed-skills record ([] when fine).
+
+    Either the none-sentence stands on a line of its own, or the skills
+    table ("Pinned SHA" column) has at least one data row and EVERY row has
+    a full 40-hex SHA, a read-summary of real length, and — when the repo
+    URL is one of the pinned skills in references/ — exactly the pinned SHA.
+    """
+    lines = text.splitlines()
+    has_sentence = any(line.strip() == NO_SKILLS_SENTENCE for line in lines)
+
+    header_idx = None
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith("|") and "pinned sha" in line.lower():
+            header_idx = i
+            break
+    if has_sentence and header_idx is None:
+        return []
+    if header_idx is None:
+        return [f'no skills table with a "Pinned SHA" column and no '
+                f'"{NO_SKILLS_SENTENCE}" statement']
+
+    cols = [c.strip().lower() for c in lines[header_idx].strip().strip("|").split("|")]
+    sha_i = next(i for i, c in enumerate(cols) if "pinned sha" in c)
+    url_i = next((i for i, c in enumerate(cols) if "url" in c), None)
+    sum_i = next((i for i, c in enumerate(cols) if "summary" in c), None)
+
+    problems: list[str] = []
+    rows = 0
+    for line in lines[header_idx + 1:]:
+        if not line.lstrip().startswith("|"):
+            break
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if all(set(c) <= set("-: ") for c in cells):
+            continue  # separator row
+        rows += 1
+        name = cells[0] if cells else f"row {rows}"
+        sha = cells[sha_i] if sha_i < len(cells) else ""
+        if not FULL_SHA_RE.match(sha):
+            problems.append(f"{name}: pinned SHA is not a full 40-hex SHA ({sha!r})")
+        elif url_i is not None and url_i < len(cells):
+            pin = known_pins().get(cells[url_i].rstrip("/"))
+            if pin and pin != sha:
+                problems.append(
+                    f"{name}: SHA {sha[:12]}… differs from the pin in "
+                    f"references/ ({pin[:12]}…) — bump the reference first")
+        if sum_i is not None:
+            summary = strip_tokens(cells[sum_i]) if sum_i < len(cells) else ""
+            if len(summary.strip()) < MIN_SUMMARY_CHARS:
+                problems.append(f"{name}: read-summary missing or too short")
+    if has_sentence:
+        # The sentence claims nothing was installed: leftover table rows
+        # contradict it, so they must be deleted.
+        return (["the none-sentence is present but the skills table still "
+                 "has rows — delete the rows"] if rows else [])
+    if rows == 0:
+        problems.append("skills table has no rows and no none-sentence")
+    return problems
 
 
 def verify_target(target: Path, allow_placeholders: bool,
@@ -338,15 +435,11 @@ def verify_target(target: Path, allow_placeholders: bool,
 
     setup_path = target / "docs" / "SETUP.md"
     if setup_path.is_file():
-        setup_ok = setup_record_ok(setup_path.read_text(encoding="utf-8"))
-        print(f"  [{'ok' if setup_ok else 'FAIL'}] docs/SETUP.md records a "
-              "pinned skill SHA or states no skills were installed")
-        if not setup_ok:
-            content_failures.append(
-                "docs/SETUP.md: no pinned skill SHA (40 hex characters) and "
-                f"no \"{NO_SKILLS_SENTENCE}\" statement — record each "
-                "installed skill's pinned SHA, or state that none were "
-                "installed")
+        setup_problems = setup_record_problems(setup_path.read_text(encoding="utf-8"))
+        print(f"  [{'ok' if not setup_problems else 'FAIL'}] docs/SETUP.md: every "
+              "installed skill has its pinned SHA + read-summary (or none installed)")
+        for problem in setup_problems:
+            content_failures.append(f"docs/SETUP.md: {problem}")
 
     if content_failures:
         if allow_placeholders:

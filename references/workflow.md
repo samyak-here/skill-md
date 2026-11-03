@@ -23,7 +23,11 @@ Work **one phase of `docs/ROADMAP.md` at a time**, in this order:
    task alone with a message that says what it did.
 4. **Review — separate from building** — when the phase's tasks are done, run
    the project's reviewer agent (`.claude/agents/reviewer.md`) in a **separate
-   pass/session** from the one that wrote the code. The reviewer checks and
+   pass/session** from the one that wrote the code. First the building
+   session writes the **review packet** the reviewer needs (it has no
+   shell): `.review/diff.patch` = `git log -p --stat <base>..HEAD`, and
+   `.review/test-output.txt` = the build/test commands with their exact
+   command lines, full output and exit status. The reviewer checks and
    reports; it never edits. Fix its findings, re-run build/tests, and only
    then tick the phase's exit test in `ROADMAP.md`.
 

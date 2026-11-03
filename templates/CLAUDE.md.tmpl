@@ -1,0 +1,62 @@
+# {{PROJECT_NAME}} — CLAUDE.md
+
+> {{PURPOSE}}
+> Project type: {{PROJECT_TYPE}} · Bootstrapped: {{DATE}}
+> Keep this file short. Detail belongs in `docs/`; this file points to it.
+
+## Stack
+
+- Project type: {{PROJECT_TYPE}}
+- Stack: {{STACK — e.g. "SwiftUI + SwiftData, iOS 17+" or "Next.js + TypeScript + Tailwind"}}
+- Data / persistence: {{DATA — e.g. "SwiftData, local only" or "Postgres via API"}}
+
+## Commands
+
+- Build: `{{BUILD_COMMAND}}`
+- Test: `{{TEST_COMMAND}}`
+- Lint / format: `{{LINT_COMMAND — or "none configured yet"}}`
+
+Run build and tests before every commit. A change that breaks either is
+not finished, whatever else is true of it.
+
+## Architecture rules
+
+- {{ARCHITECTURE_RULE_1 — e.g. "MVVM: no business logic or networking in views"}}
+- {{ARCHITECTURE_RULE_2 — e.g. "All money values are Decimal, never Double"}}
+- {{ARCHITECTURE_RULE_3 — add or delete lines as the project needs}}
+- New code follows the patterns already in the file next to it, not a new
+  pattern imported from elsewhere.
+
+## Behaviour rules
+
+These four rules override convenience. (Summarised from the Karpathy
+CLAUDE.md tradition — see docs/SETUP.md for the source.)
+
+1. **Think before coding.** State your assumptions. If a request is
+   ambiguous in a way that changes the result, ask — don't silently pick.
+2. **Simplicity first.** Write the least code that solves the problem.
+   No speculative features, abstractions, or configurability nobody asked for.
+3. **Surgical changes.** Touch only what the task requires. Don't refactor,
+   reformat, or "improve" adjacent code; match the existing style.
+4. **Goal-driven execution.** Turn the task into a checkable outcome, work
+   until it's verified (test passes, screen renders, command succeeds),
+   and report what you actually verified — not what you intended.
+
+## Working rules
+
+- Follow the loop in the project workflow: **spec → plan → build →
+  separate review**, one roadmap phase per fresh session.
+- Before starting work, read `docs/STATE.md` and the current phase in
+  `docs/ROADMAP.md`. When you finish a session, update `docs/STATE.md`.
+- The reviewer agent (`.claude/agents/reviewer.md`) reviews; it never edits.
+- Scope is `docs/PRD.md`. If it's not in v1 scope, don't build it — propose
+  a roadmap change instead.
+
+## Secrets — hard rule
+
+- No secrets, API keys, or tokens in code, docs, or commits. Ever.
+- Client apps contain no server-side secrets: anything shipped in an app
+  binary or a web bundle is public. Secrets live in environment variables
+  or a backend you control.
+- Credentials the app needs at runtime go in the platform secure store
+  (e.g. iOS Keychain), never in plain files or defaults.

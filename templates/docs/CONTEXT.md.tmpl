@@ -1,0 +1,46 @@
+# {{PROJECT_NAME}} — Context & Glossary
+
+> {{PURPOSE}}
+> Created: {{DATE}}
+
+Shared language for this project. When a term below is used in code, docs,
+or conversation, it means exactly what's written here. If a session uses a
+term differently, fix this file or the session's usage — don't let both
+stand.
+
+## Glossary
+
+| Term | Meaning in this project |
+|---|---|
+| {{TERM_1}} | {{MEANING_1 — one sentence, project-specific}} |
+| {{TERM_2}} | {{MEANING_2}} |
+| {{TERM_3}} | {{MEANING_3}} |
+
+Add a row whenever a domain word gets used in a way an outsider (or a
+fresh agent session) could misread. Delete the example rows once real
+terms exist.
+
+## Domain rules
+
+Facts about the domain that code must respect and that aren't obvious from
+the code itself. Examples of the shape (replace with this project's real
+rules):
+
+- {{DOMAIN_RULE_1 — e.g. "Amounts are always Decimal with the account's
+  currency; rounding is half-up to 2 places"}}
+- {{DOMAIN_RULE_2 — e.g. "A 'month' for budgets is a calendar month in the
+  user's timezone, not a rolling 30 days"}}
+
+## Key decisions
+
+Decisions live as ADRs in `docs/adr/` — this file does not restate them.
+The ones a new session should read first:
+
+- {{ADR_LINK_1 — e.g. "[ADR-0001](adr/0001-storage-choice.md) — why
+  SwiftData over Core Data". Delete if no ADRs exist yet.}}
+
+## Pointers
+
+- What v1 is: `docs/PRD.md`
+- Where the project is right now: `docs/STATE.md`
+- Rules for working here: `CLAUDE.md`

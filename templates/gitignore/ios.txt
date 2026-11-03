@@ -1,0 +1,25 @@
+# Xcode / iOS
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager / CocoaPods
+.build/
+Pods/
+*.xcworkspace
+!default.xcworkspace
+
+# Secrets — signing and API config stay local
+*.p12
+*.mobileprovision
+Secrets.xcconfig
+GoogleService-Info.plist
+.env

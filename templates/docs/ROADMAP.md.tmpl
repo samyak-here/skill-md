@@ -1,0 +1,68 @@
+# {{PROJECT_NAME}} — Roadmap
+
+> {{PURPOSE}}
+> Created: {{DATE}} · Project type: {{PROJECT_TYPE}}
+
+Work phases **in order, one per fresh session**. A phase is done only when
+every exit test passes and a separate review is clean. Tick boxes as exit
+tests pass; don't tick ahead. Rewrite the phase list after the Phase 0
+interview if the project's shape demands it — but keep exit tests on every
+phase.
+
+## Phase 0 — Setup
+
+- [x] Project bootstrapped (docs, CLAUDE.md, skills, reviewer agent).
+- [ ] Blank/template project builds with the command in CLAUDE.md.
+
+Exit test: a fresh agent session can read CLAUDE.md + docs/STATE.md and
+state what this project is and what Phase 1 is.
+
+## Phase 1 — Skeleton
+
+- [ ] App/product shell runs: navigation, empty main screens/routes,
+      design system basics (type, colour, spacing) in place.
+- [ ] Uses realistic placeholder structure — no feature logic yet.
+
+Exit test: the skeleton runs end-to-end (simulator, browser, or CLI) and
+every main screen/route opens without error.
+
+## Phase 2 — Core domain
+
+- [ ] Core data model / domain logic implemented.
+- [ ] Persistence works across restarts.
+
+Exit test: automated tests cover the domain's provably-right answers
+(calculations, parsing, transforms) and pass; data survives a restart.
+
+## Phase 3 — Main features
+
+- [ ] The v1 scope features from PRD.md, built one plan at a time
+      (one `docs/plans/PLAN.md` per feature or sub-phase).
+
+Exit test: each PRD v1 feature works end-to-end with real (not mock) data,
+verified by using it — not only by reading the code.
+
+## Phase 4 — Data in / integrations
+
+- [ ] Imports, sync, or external-service integrations in PRD scope.
+- [ ] Failure states handled: bad input, offline, service errors.
+
+Exit test: a real import/integration run succeeds, and repeating it does
+not duplicate data.
+
+## Phase 5 — Polish and ship
+
+- [ ] Accessibility pass (platform-appropriate: VoiceOver/Dynamic Type,
+      keyboard/contrast for web).
+- [ ] Dark Mode / platform polish, empty states, error states.
+- [ ] Privacy/store/deployment requirements for the target platform.
+
+Exit test: shipped in its intended form (TestFlight/release build,
+deployment, or published artifact) and used by its intended user.
+
+---
+
+## Later / not v1
+
+{{LATER — ideas deliberately parked here from the PRD out-of-scope list.
+Listing them here is what stops them leaking into v1 phases.}}

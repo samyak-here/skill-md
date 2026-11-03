@@ -1,0 +1,46 @@
+# {{PROJECT_NAME}} — AGENTS.md
+
+> {{PURPOSE}}
+> Project type: {{PROJECT_TYPE}} · Bootstrapped: {{DATE}}
+
+Instructions for any AI coding agent working in this repository (Codex,
+Cursor, Copilot, and others). Claude Code agents: `CLAUDE.md` in this repo
+carries the same rules in fuller form — where the two differ, tell the user
+instead of picking one silently.
+
+## Stack and commands
+
+- Stack: {{STACK}}
+- Data / persistence: {{DATA}}
+- Build: `{{BUILD_COMMAND}}`
+- Test: `{{TEST_COMMAND}}`
+
+Run build and tests before every commit.
+
+## Rules
+
+1. **Think before coding.** State assumptions; ask when an ambiguity
+   changes the outcome instead of silently choosing.
+2. **Simplicity first.** Least code that solves the problem. No speculative
+   features or abstractions.
+3. **Surgical changes.** Only what the task requires; match existing style;
+   no drive-by refactors or reformatting.
+4. **Goal-driven execution.** Define the checkable outcome, verify it
+   (tests, build, rendered output), and report what was actually verified.
+
+## Process
+
+- Read `docs/STATE.md` and the current phase of `docs/ROADMAP.md` before
+  starting. Update `docs/STATE.md` when you finish a session.
+- Work one roadmap phase at a time: spec → plan → build → separate review.
+  Reviews are done in a separate pass and the reviewer never edits code.
+- Scope is defined by `docs/PRD.md`, including its out-of-scope list.
+  Don't build out-of-scope work; propose a roadmap change instead.
+- Architecture decisions go in `docs/adr/` using the template there.
+
+## Secrets — hard rule
+
+No secrets, API keys, or tokens in code, docs, or commits. Client apps and
+web bundles contain no server-side secrets — anything shipped to a client
+is public. Runtime credentials belong in the platform secure store or in
+server-side environment variables, nowhere else.

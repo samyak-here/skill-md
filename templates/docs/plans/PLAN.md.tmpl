@@ -1,0 +1,37 @@
+# Plan — {{PHASE_OR_FEATURE_NAME}}
+
+> Project: {{PROJECT_NAME}} · Created: {{DATE}}
+> Copy this file for each roadmap phase (or feature inside Phase 3):
+> `docs/plans/<phase>-plan.md`. Get the spec section approved before
+> building anything.
+
+## Spec
+
+- **Goal:** {{GOAL — one sentence: what this phase achieves}}
+- **Roadmap phase:** {{PHASE — e.g. "Phase 2 — Core domain"}}
+- **In scope:** {{IN_SCOPE}}
+- **Out of scope:** {{OUT_OF_SCOPE — what this phase deliberately does not do}}
+- **Exit test:** {{EXIT_TEST — the provable completion check, copied or
+  refined from ROADMAP.md}}
+
+## Tasks
+
+Small tasks, in order. Each task names its files and is verifiable on its
+own. If a task can't be described that way, split it.
+
+- [ ] 1. {{TASK_1}} — files: {{FILES_1}} — verify: {{HOW_1}}
+- [ ] 2. {{TASK_2}} — files: {{FILES_2}} — verify: {{HOW_2}}
+- [ ] 3. {{TASK_3}} — files: {{FILES_3}} — verify: {{HOW_3}}
+
+## Tests
+
+- [ ] {{TEST_1 — required for anything with a provably right answer:
+  calculations, parsing, data transforms. Written before the code.}}
+- [ ] Build command passes: `{{BUILD_COMMAND}}`
+- [ ] Test command passes: `{{TEST_COMMAND}}`
+
+## Review checklist (separate pass, reviewer does not edit)
+
+- [ ] Reviewer agent run against this phase's changes.
+- [ ] Findings fixed and re-verified, or explicitly deferred in STATE.md.
+- [ ] `docs/STATE.md` updated; roadmap exit test ticked only if it passed.

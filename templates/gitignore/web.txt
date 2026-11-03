@@ -1,0 +1,19 @@
+# Node / web
+node_modules/
+dist/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+.vercel/
+.turbo/
+
+# Environment — names in .env.example only, values stay local
+.env
+.env.*
+!.env.example
+
+# Misc
+coverage/
+*.tsbuildinfo

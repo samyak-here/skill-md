@@ -17,7 +17,7 @@ xcuserdata/
 Pods/
 
 # Secrets — signing material stays local
-*.p12
+# (*.p12 is already covered by the generic fragment.)
 *.mobileprovision
 Secrets.xcconfig
 .env

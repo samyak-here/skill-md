@@ -22,7 +22,8 @@ Behaviour:
   * Creates docs/, docs/adr/, docs/plans/, .claude/agents/, .claude/skills/.
   * Refuses to overwrite existing files unless --force (skips are reported).
     With --force, every overwritten file is first backed up to
-    <filename>.pre-bootstrap.bak in the same directory.
+    <filename>.pre-bootstrap.bak in the same directory (an existing backup
+    is never overwritten — the next backup gets a .1, .2, ... suffix).
   * The target must already exist unless --create-target is passed; a typo
     in the path is an error, not a silently created directory tree.
   * .gitignore: built from the generic + stack fragments (de-duplicated).
@@ -31,9 +32,22 @@ Behaviour:
     so re-running never corrupts or duplicates it. A mangled block (end
     marker before start marker) is a clean error, file left untouched.
   * Verification checks that required dirs/files exist AND scans every
-    generated file for leftover {{...}} fill-in tokens. Leftover tokens fail
+    generated file for leftover fill-in tokens. Leftover tokens fail
     verification unless --allow-placeholders is passed (the Step 2 setup
     run), in which case they are reported as a per-file warning.
+    --allow-placeholders is rejected together with --verify: Step 6
+    verification must run against filled files.
+  * The token pattern only matches bootstrap-style tokens — double braces
+    whose inner content starts with an uppercase letter ({{STACK}},
+    {{BUILD_COMMAND}}, and the long fill-in prompts, which all start with
+    an uppercase word). Prose like {{...}} and template examples from
+    other engines (Jinja/Handlebars/Vue: {{ user.name }}, {{ count }})
+    are NOT flagged.
+  * Verification also checks content, not just existence: the PRD's
+    out-of-scope list must be non-empty (the interview rule), and
+    docs/SETUP.md must record a pinned skill SHA or state that no stack
+    skills were installed. In a setup run with --allow-placeholders these
+    two checks are warnings only (Step 3 has not filled the docs yet).
 """
 
 from __future__ import annotations
@@ -76,7 +90,17 @@ GITIGNORE_END = "# <<< project-bootstrap <<<"
 
 CLAUDE_LINE_WARN = 80
 
-TOKEN_RE = re.compile(r"\{\{[^}]+\}\}")
+# Bootstrap fill-in tokens are SHOUTY: the inner content starts with an
+# uppercase letter ({{STACK}}, {{TERM_1}}, {{BUILD_COMMAND}}, and the long
+# fill-in prompts such as {{OUT_OF_SCOPE_1 — ...}}, which start with an
+# uppercase word). Matching only that shape keeps verification from
+# flagging prose like {{...}} or other template engines' examples
+# (Jinja/Handlebars/Vue: {{ user.name }}, {{ count }}).
+TOKEN_RE = re.compile(r"\{\{\s*[A-Z][^{}]*\}\}")
+
+HEX40_RE = re.compile(r"\b[0-9a-f]{40}\b")
+NO_SKILLS_SENTENCE = "No stack skills installed for this project."
+OUT_OF_SCOPE_HEADING_RE = re.compile(r"out.of.scope", re.IGNORECASE)
 
 
 class BootstrapError(Exception):
@@ -107,8 +131,17 @@ def find_tokens(text: str) -> list[str]:
 
 
 def backup_file(path: Path, report: dict[str, list[str]]) -> None:
-    """Copy path to <filename>.pre-bootstrap.bak next to it, before overwrite."""
+    """Copy path to <filename>.pre-bootstrap.bak next to it, before overwrite.
+
+    An existing backup is never overwritten: if the plain .bak name is
+    taken, use .bak.1, .bak.2, ... so each backup keeps the distinct
+    content it preserved.
+    """
     backup = path.with_name(path.name + ".pre-bootstrap.bak")
+    counter = 1
+    while backup.exists():
+        backup = path.with_name(f"{path.name}.pre-bootstrap.bak.{counter}")
+        counter += 1
     backup.write_bytes(path.read_bytes())
     report["backed_up"].append(str(backup))
 
@@ -171,11 +204,51 @@ def handle_gitignore(target: Path, project_type: str, date: str, force: bool,
         report["overwritten"].append(".gitignore (bootstrap block replaced)")
         return
 
-    # Existing user .gitignore without a bootstrap block: append, never replace.
-    backup_file(path, report)
+    # Existing user .gitignore without a bootstrap block: append, never
+    # replace. No backup is made here — appending destroys nothing, the
+    # user's original content stays in the file untouched.
     separator = "" if existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
     path.write_text(existing + separator + block, encoding="utf-8")
     report["created"].append(".gitignore (bootstrap block appended to existing file)")
+
+
+def prd_out_of_scope_ok(text: str) -> bool:
+    """True if the PRD's out-of-scope section lists at least one real item.
+
+    Only list items count — the section's intro sentence is present in the
+    template even when the list itself was never filled in, so counting
+    prose would make this check useless. An item counts if, after removing
+    any leftover template tokens from it, something real remains (not
+    blank, not a lone TODO/TBD).
+    """
+    lines = text.splitlines()
+    in_section = False
+    for line in lines:
+        if line.lstrip().startswith("#"):
+            if OUT_OF_SCOPE_HEADING_RE.search(line):
+                in_section = True
+                continue
+            if in_section:
+                break  # next heading: section ended
+        if not in_section:
+            continue
+        item = re.match(r"\s*[-*]\s+(.*)$", line)
+        if not item:
+            continue
+        content = TOKEN_RE.sub("", item.group(1)).strip()
+        content = content.strip("`*_ ").strip()
+        if content and content.upper() not in ("TODO", "TBD"):
+            return True
+    return False
+
+
+def setup_record_ok(text: str) -> bool:
+    """True if SETUP.md records a pinned skill SHA (40 hex chars) or states,
+    on a line of its own, that no stack skills were installed."""
+    if HEX40_RE.search(text):
+        return True
+    return any(line.strip() == NO_SKILLS_SENTENCE
+               for line in text.splitlines())
 
 
 def verify_target(target: Path, allow_placeholders: bool,
@@ -245,6 +318,45 @@ def verify_target(target: Path, allow_placeholders: bool,
                     f"unfilled template tokens in {dest_rel}"
                     f"{' (pre-existing/skipped file)' if dest_rel in skipped else ''}: "
                     + ", ".join(tokens))
+
+    # Content checks — existence and token-freeness alone don't prove the
+    # docs were actually filled in with decisions. In a setup run with
+    # --allow-placeholders these are warnings only: Step 3 (fill-in) and
+    # Step 4 (skill installs) have not happened yet at that point.
+    content_failures: list[str] = []
+
+    prd_path = target / "docs" / "PRD.md"
+    if prd_path.is_file():
+        prd_ok = prd_out_of_scope_ok(prd_path.read_text(encoding="utf-8"))
+        print(f"  [{'ok' if prd_ok else 'FAIL'}] docs/PRD.md out-of-scope list "
+              "is non-empty")
+        if not prd_ok:
+            content_failures.append(
+                "docs/PRD.md: the out-of-scope list is empty — the interview "
+                "rule is that it must not be blank (record at least one "
+                "explicit non-goal)")
+
+    setup_path = target / "docs" / "SETUP.md"
+    if setup_path.is_file():
+        setup_ok = setup_record_ok(setup_path.read_text(encoding="utf-8"))
+        print(f"  [{'ok' if setup_ok else 'FAIL'}] docs/SETUP.md records a "
+              "pinned skill SHA or states no skills were installed")
+        if not setup_ok:
+            content_failures.append(
+                "docs/SETUP.md: no pinned skill SHA (40 hex characters) and "
+                f"no \"{NO_SKILLS_SENTENCE}\" statement — record each "
+                "installed skill's pinned SHA, or state that none were "
+                "installed")
+
+    if content_failures:
+        if allow_placeholders:
+            print("\n  WARNING: content checks not yet satisfied "
+                  "(expected during the Step 2 setup run; Steps 3–4 "
+                  "complete them):")
+            for failure in content_failures:
+                print(f"    - {failure}")
+        else:
+            failures.extend(content_failures)
 
     if failures:
         print("\nVerification FAILED:")
@@ -376,6 +488,11 @@ def main(argv: list[str] | None = None) -> int:
     target = Path(args.target).expanduser().resolve()
 
     if args.verify:
+        if args.allow_placeholders:
+            print("ERROR: --allow-placeholders is not allowed with --verify: "
+                  "verification must run against filled files "
+                  "(see SKILL.md Step 6).", file=sys.stderr)
+            return 2
         return run_verify(target, args.allow_placeholders)
 
     missing = [flag for flag, value in (

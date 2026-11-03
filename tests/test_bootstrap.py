@@ -19,7 +19,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "bootstrap.py"
 
-TOKEN_RE = re.compile(r"\{\{[^}]+\}\}")
+# Same narrowed pattern the script's scanner uses: only bootstrap-style
+# tokens (inner content starts with an uppercase letter) are genuine
+# fill-in tokens. Prose like {{...}} and other engines' examples
+# ({{ user.name }}) must survive a fill untouched.
+TOKEN_RE = re.compile(r"\{\{\s*[A-Z][^{}]*\}\}")
+
+NO_SKILLS_SENTENCE = "No stack skills installed for this project."
 
 EXPECTED_FILES = [
     "CLAUDE.md",
@@ -55,12 +61,32 @@ def snapshot_tree(root: Path) -> dict[str, bytes]:
 
 
 def fill_all_tokens(root: Path) -> None:
-    """Replace every leftover {{...}} token in generated .md files."""
+    """Fill generated .md files the way SKILL.md Step 3 does: replace only
+    genuine bootstrap tokens (uppercase-start pattern), leaving prose —
+    including any token-shaped prose — untouched.
+
+    Fixture choice for the SETUP content check: after the generic token
+    fill, SETUP.md's skills table contains no real 40-char SHA, so the
+    fixture writes the documented none-sentence on its own line — the
+    same thing an agent does for a project with no stack skills (see
+    templates/docs/SETUP.md.tmpl). That is what lets --verify's SETUP
+    check pass on the standard fixture.
+    """
     for rel in EXPECTED_FILES:
         path = root / rel
         if path.suffix == ".md" and path.is_file():
             path.write_text(TOKEN_RE.sub("FILLED", path.read_text(encoding="utf-8")),
                             encoding="utf-8")
+    setup = root / "docs" / "SETUP.md"
+    if setup.is_file():
+        text = setup.read_text(encoding="utf-8")
+        # Standalone-line check (not substring): the template's own
+        # instructions mention the sentence mid-line, which must not
+        # count — the script's check requires it on a line of its own.
+        if not any(line.strip() == NO_SKILLS_SENTENCE
+                   for line in text.splitlines()):
+            setup.write_text(text + "\n" + NO_SKILLS_SENTENCE + "\n",
+                             encoding="utf-8")
 
 
 class BootstrapTests(unittest.TestCase):
@@ -192,6 +218,113 @@ class BootstrapTests(unittest.TestCase):
                             "--purpose", "Y", "--target", str(self.target))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid choice", result.stderr)
+
+    # (k) regression: fill the way Step 3 does (real templates, prose
+    # survives), then --verify passes; Jinja/prose examples don't trip it
+    def test_k_regression_fill_like_step3_and_verify_passes(self):
+        result = run_script(*setup_args(self.target, "--create-target",
+                                        "--allow-placeholders", ptype="web"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        fill_all_tokens(self.target)
+        reviewer = (self.target / ".claude" / "agents" / "reviewer.md") \
+            .read_text(encoding="utf-8")
+        # The gate paragraph's prose survived the fill (v2 bug: the helper
+        # blanket-replaced it, and the old prose itself tripped the scan).
+        self.assertIn("leftover double-brace template tokens", reviewer)
+        # Non-bootstrap template syntax in filled docs must not be flagged.
+        context = self.target / "docs" / "CONTEXT.md"
+        context.write_text(context.read_text(encoding="utf-8")
+                           + "\nUse {{ user.name }} in the template.\n",
+                           encoding="utf-8")
+        state = self.target / "docs" / "STATE.md"
+        state.write_text(state.read_text(encoding="utf-8")
+                         + "\nToken syntax looks like {{...}} in prose.\n",
+                         encoding="utf-8")
+        result = run_script("--verify", "--target", str(self.target))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Verification passed", result.stdout)
+
+    # (l) --verify refuses --allow-placeholders
+    def test_l_verify_rejects_allow_placeholders(self):
+        result = run_script(*setup_args(self.target, "--create-target",
+                                        "--allow-placeholders"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = run_script("--verify", "--target", str(self.target),
+                            "--allow-placeholders")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("--allow-placeholders is not allowed with --verify",
+                      result.stderr)
+
+    # (m) repeated --force runs never overwrite an earlier backup
+    def test_m_force_backups_never_overwritten(self):
+        result = run_script(*setup_args(self.target, "--create-target",
+                                        "--allow-placeholders"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        claude = self.target / "CLAUDE.md"
+        claude.write_text(claude.read_text(encoding="utf-8") + "\nVERSION-ONE\n",
+                          encoding="utf-8")
+        result = run_script(*setup_args(self.target, "--force",
+                                        "--allow-placeholders"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        claude.write_text(claude.read_text(encoding="utf-8") + "\nVERSION-TWO\n",
+                          encoding="utf-8")
+        result = run_script(*setup_args(self.target, "--force",
+                                        "--allow-placeholders"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        first = self.target / "CLAUDE.md.pre-bootstrap.bak"
+        second = self.target / "CLAUDE.md.pre-bootstrap.bak.1"
+        self.assertTrue(first.is_file())
+        self.assertTrue(second.is_file())
+        self.assertIn("VERSION-ONE", first.read_text(encoding="utf-8"))
+        self.assertNotIn("VERSION-TWO", first.read_text(encoding="utf-8"))
+        self.assertIn("VERSION-TWO", second.read_text(encoding="utf-8"))
+
+    # (n) appending the block to a user's .gitignore creates no backup
+    def test_n_gitignore_append_creates_no_backup(self):
+        self.target.mkdir(parents=True)
+        (self.target / ".gitignore").write_text("my-custom-entry/\n",
+                                                encoding="utf-8")
+        result = run_script(*setup_args(self.target, "--allow-placeholders"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        backups = [p for p in self.target.rglob("*.pre-bootstrap.bak*")]
+        self.assertEqual(backups, [])
+
+    # (o) PRD out-of-scope list emptied -> --verify fails the content check
+    def test_o_prd_out_of_scope_emptied_fails_verify(self):
+        result = run_script(*setup_args(self.target, "--create-target",
+                                        "--allow-placeholders"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        fill_all_tokens(self.target)
+        prd = self.target / "docs" / "PRD.md"
+        lines = prd.read_text(encoding="utf-8").splitlines()
+        in_section = False
+        for i, line in enumerate(lines):
+            if line.startswith("## "):
+                in_section = "out of scope" in line.lower()
+                continue
+            if in_section and line.lstrip().startswith("- "):
+                lines[i] = "- TODO"
+        prd.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        result = run_script("--verify", "--target", str(self.target))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("out-of-scope list is empty", result.stdout)
+
+    # (p) SETUP.md with neither a pinned SHA nor the none-sentence fails
+    def test_p_setup_without_sha_or_sentence_fails_verify(self):
+        result = run_script(*setup_args(self.target, "--create-target",
+                                        "--allow-placeholders"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        fill_all_tokens(self.target)
+        # Sanity: the filled fixture passes (none-sentence present).
+        result = run_script("--verify", "--target", str(self.target))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        setup = self.target / "docs" / "SETUP.md"
+        text = setup.read_text(encoding="utf-8")
+        setup.write_text(text.replace(NO_SKILLS_SENTENCE, "Skills: TBD"),
+                         encoding="utf-8")
+        result = run_script("--verify", "--target", str(self.target))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no pinned skill SHA", result.stdout)
 
 
 if __name__ == "__main__":

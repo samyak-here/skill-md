@@ -129,10 +129,15 @@ python3 scripts/bootstrap.py --verify --target <path to the project repo>
 ```
 
 Do not reuse the Step 2 run's output — that run predates Step 3's fill-in
-and Step 4's installs. `--verify` (without `--allow-placeholders`) fails
-on any leftover `{{...}}` token in the generated files: **if it fails on
-tokens, Step 3 was not finished** — go back, fill the remaining tokens,
-and re-run `--verify` until it passes. Also:
+and Step 4's installs. Do **not** add `--allow-placeholders` to the
+verify command — the script rejects that combination outright, because
+verification must run against filled files. `--verify` fails on any
+leftover fill-in token in the generated files: **if it fails on tokens,
+Step 3 was not finished** — go back, fill the remaining tokens, and
+re-run `--verify` until it passes. `--verify` also checks content, not
+just tokens: the PRD's out-of-scope list must be non-empty, and
+`docs/SETUP.md` must record a pinned SHA for each installed skill (or
+state that no stack skills were installed). Also:
 
 - Confirm `.gitignore` covers secrets for this stack.
 - Confirm the project's empty/template app still builds with the build

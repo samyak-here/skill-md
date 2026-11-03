@@ -29,10 +29,10 @@ xcodebuild test -scheme {{SCHEME}} \
 
 Do **not** guess a simulator name (e.g. a specific iPhone model) — it may
 not exist in the user's Xcode install. During setup, discover an installed
-device with `xcrun simctl list devices available`, pick one iPhone from
-the list, and record that exact name in place of `<SIMULATOR>` in
-`CLAUDE.md`'s build/test commands. That recorded name is what every future
-session uses.
+device with `xcrun simctl list devices available` (macOS only — iOS
+development requires a Mac in any case), pick one iPhone from the list,
+and record that exact name in place of `<SIMULATOR>` in `CLAUDE.md`'s
+build/test commands. That recorded name is what every future session uses.
 
 Verification (SKILL.md Step 6) means: the template app builds with the first
 command. A screenshot or simulator launch is the exit evidence for UI phases

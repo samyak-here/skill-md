@@ -97,7 +97,9 @@ your-project/
   `docs/SETUP.md`, so a setup is reproducible and auditable later. To bump
   a pin deliberately: update the SHA and pin date in the reference file,
   re-read the skill, update `docs/SETUP.md`, and commit that change on its
-  own.
+  own. Anyone can check a pin: `git ls-remote <repo-url>` shows the repo's
+  current HEAD, or clone the repo and run `git cat-file -t <sha>` to
+  confirm the pinned commit exists.
 - **`CLAUDE.md` is canonical; `AGENTS.md` mirrors it.** The two files carry
   the same rules for different agent tools. When you edit one, update the
   other in the same commit — they are a mirror pair, not two sources of
@@ -162,6 +164,37 @@ preserved, not replaced.
 **For the skill itself:** delete the folder —
 `rm -rf ~/.claude/skills/project-bootstrap`. Nothing else on your system
 was touched by installing it.
+
+## Changelog — v3 (2026-11-03)
+
+Fixes from a second critical review, which caught v2's verify gate
+failing on its own reviewer template:
+
+- **Reviewer false-positive fixed, scanner pattern narrowed.** The
+  reviewer template's gate paragraph no longer contains token-shaped
+  prose, and the token scanner only flags bootstrap-style tokens (inner
+  content starting with an uppercase letter) — prose like `{{...}}` and
+  other engines' examples (`{{ user.name }}`) are no longer flagged.
+- **`--verify` refuses `--allow-placeholders`** (exit 2): verification
+  must run against filled files, and a tired agent can no longer "fix" a
+  failing Step 6 by adding the flag.
+- **Backup handling fixed.** A `--force` backup never overwrites an
+  earlier one (`.bak.1`, `.bak.2`, ...), no backup is written for a
+  `.gitignore` append (nothing is destroyed by appending), and the
+  generated `.gitignore` now ignores `*.pre-bootstrap.bak*` so backups
+  don't pollute `git status`.
+- **`*.key` restored** to the generic secrets fragment — security wins
+  over the nuisance of ignoring the odd harmless key file.
+- **Reviewer read-only is now enforced by its tool list** (Read, Grep,
+  Glob — no edit tools, no shell) instead of by prose. It reviews test
+  evidence supplied by the building session or CI, and without any its
+  verdict cannot be a clean Pass.
+- **`--verify` checks content, not just tokens:** the PRD's out-of-scope
+  list must be non-empty, and `docs/SETUP.md` must record a pinned skill
+  SHA or state that no stack skills were installed.
+- **Regression tests added**, including a fill that works the way
+  SKILL.md Step 3 does (only genuine tokens are replaced — v2's test
+  helper blanket-replaced everything, which hid the false-positive).
 
 ## Changelog — v2 (2026-11-03)
 

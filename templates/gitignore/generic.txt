@@ -3,10 +3,17 @@
 .env.*
 !.env.example
 *.pem
+# Private keys: *.key also catches the odd harmless file, but that
+# nuisance is a fair price for never committing a real private key.
+*.key
 *.p12
 id_rsa*
 secrets/
 *.local
+
+# project-bootstrap backups (written before a --force overwrite)
+*.pre-bootstrap.bak
+*.pre-bootstrap.bak.*
 
 # OS and editors
 .DS_Store

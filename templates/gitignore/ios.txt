@@ -2,6 +2,7 @@
 DerivedData/
 build/
 xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcuserstate
 *.xcscmblueprint
 *.xccheckout
@@ -14,12 +15,14 @@ xcuserdata/
 # Swift Package Manager / CocoaPods
 .build/
 Pods/
-*.xcworkspace
-!default.xcworkspace
 
-# Secrets — signing and API config stay local
+# Secrets — signing material stays local
 *.p12
 *.mobileprovision
 Secrets.xcconfig
-GoogleService-Info.plist
 .env
+
+# Note: GoogleService-Info.plist is NOT ignored here. It is client config
+# (it identifies the Firebase project; it is not a server secret) and is
+# commonly committed so clones build without extra setup. If your project
+# treats it as sensitive, add it to your local .gitignore yourself.

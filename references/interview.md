@@ -8,6 +8,11 @@ the list as a form. For each answer:
   generated file — otherwise accept and move on.
 - If the user defers a question, record it under "Blockers / deferred" in
   `docs/STATE.md` and continue.
+- If the user answers several questions at once, record **every** answer
+  given, mark those questions answered, and continue from the first
+  unanswered one. Do not re-ask a question that was already answered in a
+  batch — one-at-a-time is the default pace, not a reason to discard
+  answers.
 
 ## Questions
 

@@ -21,9 +21,7 @@ git clone https://github.com/samyak-here/skill-md.git \
 ```
 
 Or copy this folder to `~/.claude/skills/project-bootstrap` by any other
-means — a skill is just a folder with a `SKILL.md` in it. If you use the
-skills CLI, `npx skills add samyak-here/skill-md` installs it the
-same way.
+means — a skill is just a folder with a `SKILL.md` in it.
 
 ## Run it
 
@@ -43,18 +41,25 @@ You can also run the file-creation step yourself, without an agent:
 
 ```bash
 python3 scripts/bootstrap.py --project-name "Ledgerly" --type ios \
-  --purpose "Personal finance tracker" --target /path/to/repo
+  --purpose "Personal finance tracker" --target /path/to/repo \
+  --allow-placeholders
 ```
 
 `--type` is one of `ios`, `web`, `python`, `generic`. The script refuses to
-overwrite existing files unless you pass `--force`, so re-running it is safe.
+overwrite existing files unless you pass `--force` (and `--force` backs
+each file up to `<filename>.pre-bootstrap.bak` first), so re-running it is
+safe. `--allow-placeholders` is needed on a setup run because the
+templates deliberately contain `{{...}}` fill-in tokens at that stage;
+after filling them in, check the result with
+`python3 scripts/bootstrap.py --verify --target /path/to/repo`, which
+fails if any token remains.
 
 ## What a run produces
 
 ```text
 your-project/
 ├── CLAUDE.md                  # House rules every Claude session loads (short)
-├── AGENTS.md                  # The same rules for non-Claude agents
+├── AGENTS.md                  # Mirror of CLAUDE.md for non-Claude agents
 ├── .gitignore                 # Generic + stack-specific, secrets excluded
 ├── .claude/
 │   ├── agents/
@@ -65,7 +70,7 @@ your-project/
     ├── ROADMAP.md             # Phases, each with an exit test
     ├── CONTEXT.md             # Glossary and domain terms
     ├── STATE.md               # Where the project is; the resume file
-    ├── SETUP.md               # What bootstrap installed, source URLs, date
+    ├── SETUP.md               # What bootstrap installed: URL, pinned SHA, date, read-summary
     ├── adr/
     │   └── 0000-template.md   # Architecture decision record template
     └── plans/
@@ -84,9 +89,19 @@ your-project/
   project-specific content.
 - **Templates, not improvisation.** Every generated document starts from a
   template in `templates/`, so quality doesn't depend on the model's mood.
-- **Pinned upstreams.** Every external skill a run installs is recorded with
-  its exact source URL and install date in `docs/SETUP.md`, so a setup is
-  reproducible and auditable later.
+- **Pinned upstreams — actually pinned.** Every external skill has an
+  exact commit SHA pinned in `references/ios.md` / `references/web.md`
+  (alongside its source URL and the pin date). A run clones the repo and
+  checks out that SHA — never a moving branch — and records SHA + URL +
+  install date + a read-summary of the skill's `SKILL.md` in
+  `docs/SETUP.md`, so a setup is reproducible and auditable later. To bump
+  a pin deliberately: update the SHA and pin date in the reference file,
+  re-read the skill, update `docs/SETUP.md`, and commit that change on its
+  own.
+- **`CLAUDE.md` is canonical; `AGENTS.md` mirrors it.** The two files carry
+  the same rules for different agent tools. When you edit one, update the
+  other in the same commit — they are a mirror pair, not two sources of
+  truth.
 - **One workflow, no framework wars.** The default process is a checklist —
   spec → plan → build → separate review, one phase per fresh session.
   Competing workflow frameworks are never installed on top of each other.
@@ -101,12 +116,17 @@ these at the step where each is needed, and records them in `docs/SETUP.md`.
 | Used for | Skill | Source |
 |---|---|---|
 | Interview style | Grill-style interviewing — one question at a time, decisions written down as they are made | Concept only; no code copied (popularised by Matt Pocock's `grill-me` in [mattpocock/skills](https://github.com/mattpocock/skills)) |
-| Behaviour rules in every `CLAUDE.md` | The 4 rules (think before coding, simplicity first, surgical changes, goal-driven execution), summarised | [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) |
+| Behaviour rules in every `CLAUDE.md` | The 4 rules (think before coding, simplicity first, surgical changes, goal-driven execution), distilled from Andrej Karpathy's public posts about LLM coding pitfalls, as packaged by the third-party repo multica-ai/andrej-karpathy-skills | [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) |
 | Workflow checklist reference | Spec → plan → build → review discipline | [obra/superpowers](https://github.com/obra/superpowers) |
 | iOS stack skill | Modern, accessible SwiftUI | [twostraws/SwiftUI-Agent-Skill](https://github.com/twostraws/SwiftUI-Agent-Skill) |
 | iOS stack skill | Apple Human Interface Guidelines for iOS/macOS UI | [axiaoge2/Apple-Hig-Designer](https://github.com/axiaoge2/Apple-Hig-Designer) |
 | Web stack skill | Design taste — stops generic, sloppy AI UI output | [leonxlnx/taste-skill](https://github.com/leonxlnx/taste-skill) |
 | Web stack skill | Design language for better-looking generated UI | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) |
+
+The four stack skills (SwiftUI-Agent-Skill, Apple-Hig-Designer,
+taste-skill, impeccable) are pinned to exact commit SHAs in
+`references/ios.md` and `references/web.md` — see those tables for the
+SHAs, pin dates, and install commands.
 
 ## Repo layout
 
@@ -116,9 +136,69 @@ project-bootstrap/
 ├── README.md
 ├── templates/          # Every file a run generates, as a template
 ├── references/         # Loaded on demand: interview, ios, web, workflow
-└── scripts/
-    └── bootstrap.py    # Deterministic file creation + verification
+├── scripts/
+│   └── bootstrap.py    # Deterministic file creation + verification
+└── tests/
+    └── test_bootstrap.py  # Stdlib unittest suite for the script
 ```
+
+## Uninstall / rollback
+
+**For a project that was bootstrapped:** setup lands as a single commit
+(`chore: initial project setup`), so the clean rollback is to revert it:
+
+```bash
+git revert <setup-commit>
+```
+
+Alternatively, by hand: delete the generated files listed in
+`docs/SETUP.md` (the docs set, `CLAUDE.md`, `AGENTS.md`,
+`.claude/agents/reviewer.md`, and anything under `.claude/skills/` that
+setup installed) and remove the marked block — between
+`# >>> project-bootstrap` and `# <<< project-bootstrap <<<` — from
+`.gitignore`. Leave the rest of `.gitignore` alone; your own entries were
+preserved, not replaced.
+
+**For the skill itself:** delete the folder —
+`rm -rf ~/.claude/skills/project-bootstrap`. Nothing else on your system
+was touched by installing it.
+
+## Changelog — v2 (2026-11-03)
+
+Fixes from a full critical review of v1:
+
+- Verification now **fails on leftover `{{...}}` template tokens** (with a
+  per-file listing), plus a `--verify` mode that re-checks a bootstrapped
+  project fresh, and an `--allow-placeholders` flag for the setup run
+  where tokens are expected.
+- Upstream skills are **pinned to exact commit SHAs** and there is a
+  mandatory **read-before-install** step: read each skill's `SKILL.md`,
+  summarise what it loads, flag network/credential/destructive requests,
+  and record all of it in `docs/SETUP.md`.
+- iOS `.gitignore` fixed: no more `*.xcworkspace` ignore or the
+  meaningless `!default.xcworkspace`; the user-data inside
+  `*.xcodeproj/project.xcworkspace` is ignored instead, and
+  `GoogleService-Info.plist` is no longer ignored by default (it's client
+  config, commonly committed).
+- Reviewer agent honesty fix: it states plainly that read-only is an
+  instruction, not a tooling guarantee (it has Bash, needed for tests),
+  the hardcoded model pin is gone, and it must refuse to review against
+  placeholder docs.
+- Script hardening: single-pass rendering (values are never re-expanded),
+  a missing `--target` is an error instead of a silently created tree, a
+  mangled `.gitignore` marker order is a clean error with the file left
+  untouched, `--force` backs up every overwritten file to
+  `<filename>.pre-bootstrap.bak` first, and skipped (pre-existing) files
+  are token-checked too.
+- A real test suite for the script (`tests/test_bootstrap.py`, stdlib
+  unittest — 10 tests covering fresh runs, token failure, verify mode,
+  idempotency, force backups, target and gitignore guards).
+- Consistency: the CLAUDE.md length warning now matches the documented
+  ~80-line rule; the iOS reference no longer hardcodes a simulator model
+  (discover one with `xcrun simctl list devices available` and record it);
+  README corrections (the unverified `npx skills add` install claim is
+  removed, and the Karpathy credit now says where the 4 rules actually
+  come from).
 
 ## Licence / credit
 

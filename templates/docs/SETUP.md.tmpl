@@ -14,13 +14,23 @@
 
 ## Installed skills
 
-Record every skill installed into `.claude/skills/` during setup. If no
-stack skills were installed (python/generic default), say so explicitly.
+Record every skill installed into `.claude/skills/` during setup. Each
+skill is **pinned to an exact commit SHA** (from the pinned-skills table in
+the project-bootstrap reference for this project type) — never record a
+bare branch. Before a skill counts as installed, its `SKILL.md` was read
+and summarised in the Read-summary column (SKILL.md Step 4,
+read-before-install). If no stack skills were installed (python/generic
+default), say so explicitly.
 
-| Skill | Source URL | Installed |
-|---|---|---|
-| {{SKILL_NAME_1}} | {{SKILL_URL_1}} | {{DATE}} |
-| {{SKILL_NAME_2}} | {{SKILL_URL_2}} | {{DATE}} |
+| Skill | Source URL | Pinned SHA | Date installed | Read-summary |
+|---|---|---|---|---|
+| {{SKILL_NAME_1}} | {{SKILL_URL_1}} | {{SKILL_SHA_1}} | {{DATE}} | {{SKILL_READ_SUMMARY_1 — 2-3 lines: what instructions this skill loads into future sessions; flag any network access, credential use, or destructive commands it asks for}} |
+| {{SKILL_NAME_2}} | {{SKILL_URL_2}} | {{SKILL_SHA_2}} | {{DATE}} | {{SKILL_READ_SUMMARY_2 — 2-3 lines, same requirements as above}} |
+
+To bump a pin deliberately: clone the skill's repo, read the new
+`SKILL.md` (and anything it loads), update the SHA + date + read-summary
+here, and commit that change on its own — never bump silently as part of
+feature work.
 
 Workflow: the default checklist in CLAUDE.md (spec → plan → build →
 separate review). If a different workflow framework was chosen at setup,
@@ -42,6 +52,7 @@ name it here instead — never run two at once.
 ## Re-running bootstrap
 
 Safe: `bootstrap.py` skips files that already exist unless `--force` is
-passed. Re-run it after pulling a newer project-bootstrap to add any *new*
+passed, and `--force` backs each overwritten file up to
+`<filename>.pre-bootstrap.bak` first. Re-run it after pulling a newer project-bootstrap to add any *new*
 template files; then reconcile differences by hand and update the date in
 the table above for anything actually re-installed.

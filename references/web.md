@@ -31,12 +31,27 @@ template app before any feature work is planned.
 
 ## Skills to install (Step 4)
 
-Install **both**, into `.claude/skills/`, and record them in `docs/SETUP.md`:
+Install **both**, into `.claude/skills/`, **pinned to the exact commits
+below** (verified 2026-11-03), then follow SKILL.md Step 4's
+read-before-install: read each skill's `SKILL.md` in full, summarise what
+it will load into future sessions, flag anything asking for network
+access, credential use, or destructive commands, and record URL + SHA +
+date + read-summary in `docs/SETUP.md`.
 
-| Skill | Why | Source |
-|---|---|---|
-| taste-skill | Design taste — prevents generic, sloppy default AI UI | https://github.com/leonxlnx/taste-skill |
-| impeccable | A design language that makes generated UI look deliberate | https://github.com/pbakaus/impeccable |
+| Skill | Why | Source URL | Pinned SHA | Pinned date |
+|---|---|---|---|---|
+| taste-skill | Design taste — prevents generic, sloppy default AI UI | https://github.com/leonxlnx/taste-skill | `12af471f627f866411b4bd785b19646d3672784c` | 2026-11-03 |
+| impeccable | A design language that makes generated UI look deliberate | https://github.com/pbakaus/impeccable | `9fadc41729c38fd47d7ae622b501558653f9d2e9` | 2026-11-03 |
+
+Install commands (pinned — never install from a moving branch):
+
+```bash
+git clone https://github.com/leonxlnx/taste-skill .claude/skills/taste-skill
+git -C .claude/skills/taste-skill checkout 12af471f627f866411b4bd785b19646d3672784c
+
+git clone https://github.com/pbakaus/impeccable .claude/skills/impeccable
+git -C .claude/skills/impeccable checkout 9fadc41729c38fd47d7ae622b501558653f9d2e9
+```
 
 They are complementary (taste/judgement + a concrete design language), not
 competing workflow frameworks, so installing both does not violate the
